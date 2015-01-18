@@ -8,36 +8,28 @@ package com.fankux.zklocker;
 import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class LockMain {
     public static void main(String[] args) throws InterruptedException {
+        final int threadCount = 2;
         ThreadPoolExecutor threadPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(1000);
         threadPool.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardOldestPolicy());
         /* 测试方案, 起两个线程, 第一个线程执行中会阻塞很长时间, 所以若另一个线程后lock的话, 会加锁失败 */
-        for (int i = 0; i < ZkLockerTestRun.threadCount; ++i) {
+        Stopwatch start = Stopwatch.createStarted();
+        for (int i = 0; i < threadCount; ++i) {
             threadPool.execute(new ZkLockerTestRun(i));
         }
         threadPool.shutdown();
         threadPool.awaitTermination(1, TimeUnit.HOURS);
+        System.out.println("thread count:" + threadCount + "; time:" + start.elapsed(TimeUnit.MILLISECONDS) + "ms");
     }
 }
 
 class ZkLockerTestRun implements Runnable {
-    public static int threadCount = 1000;
-
     private static final Logger logger = LoggerFactory.getLogger(ZkLockerTestRun.class);
-    private static Stopwatch stopwatch;
-    private static AtomicInteger lockCount;
-
-    static {
-        lockCount = new AtomicInteger(0);
-    }
-
     private int seq = 0;
 
     public ZkLockerTestRun(int sequence) {
@@ -60,7 +52,7 @@ class ZkLockerTestRun implements Runnable {
     /* 让第1个线程先获得锁, 然后关闭zk会话, 等到过了zk 的 sessionTimeout 时间再让线程2尝试获得锁
      * 会产生unlock的sessionExpire, 分析如下:
      * 线程1首先会获得锁,然后立即关闭会话, 然后阻塞, 线程2首先阻塞再尝试获得锁, 两个阻塞的时间是一致的,
-     * 然后就造成了两个线程同时去尝试unlock, 那么必然会有一个发生unlock的异常
+     * 就造成了两个线程同时去尝试unlock, 那么必然会有一个发生unlock的异常
      * 这种情形暴露了一个问题, 线程获得锁后主动的关闭会话,会导致别的请求也获得锁, 而此线程此时可能并没有主动unlock  */
     private ZkLocker quitFirstForSessionTimeOut() {
         if (seq == 0) { /* 第一个线程 */
@@ -96,35 +88,14 @@ class ZkLockerTestRun implements Runnable {
     }
 
     /* 竞争, 要测试多线程同时启动zk客户端, 只有一个成功 */
-    private ZkLocker complete() {
-        return ZkLockerFactory.getLocker(new ZkLockerListener() {
-            @Override
-            public void lockAcquired() {
-                int count;
-                if ((count = lockCount.getAndIncrement()) == 0) {
-                    logger.info("count:0");
-                    stopwatch = Stopwatch.createStarted();
-                }
-
-                if (count == threadCount - 1) {
-                    logger.info("线程数:{},时间:{}ms", threadCount, stopwatch.elapsed(TimeUnit.MILLISECONDS));
-                } else {
-                    logger.info("count:{}", lockCount);
-                }
-
-            }
-
-            @Override
-            public void lockReleased() {
-
-            }
-        });
+    private ZkLocker compete() {
+        return ZkLockerFactory.getLocker();
     }
 
     /* 竞争, 抢到锁的立即关闭客户端, 会产生sessionExpire.
      * 问题分析:线程1(节点A)抢到锁, 然后线程1 unlock时delete了节点A, 并关闭了会话,
      * 然后线程2(节点B)监听节点A, 但是它并不知道节点A已经过期了, 所以sessionExpire, 发生在exist上, 然后通过重试可以再次获得 */
-    private ZkLocker completeClose() {
+    private ZkLocker competeClose() {
         return ZkLockerFactory.getLocker(new ZkLockerListener() {
             @Override
             public void lockAcquired() {
@@ -140,9 +111,7 @@ class ZkLockerTestRun implements Runnable {
 
     @Override
     public void run() {
-        ZkLocker locker = complete();
-//        locker.lockBlock();
-//        logger.info("阻塞locker获得:{}", seq);
+        ZkLocker locker = competeClose();
         boolean result = locker.lock();
         logger.info("locker {} result : {}", seq, result);
         locker.unlock();
