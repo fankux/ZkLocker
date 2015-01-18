@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 public class LockMain {
     public static void main(String[] args) throws InterruptedException {
-        final int threadCount = 2;
+        final int threadCount = 8;
         ThreadPoolExecutor threadPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(1000);
         threadPool.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardOldestPolicy());
         /* 测试方案, 起两个线程, 第一个线程执行中会阻塞很长时间, 所以若另一个线程后lock的话, 会加锁失败 */
@@ -112,7 +112,13 @@ class ZkLockerTestRun implements Runnable {
     @Override
     public void run() {
         ZkLocker locker = competeClose();
-        boolean result = locker.lock();
+
+        boolean result;
+        if(seq%2 == 0){
+            result = locker.lock("seqEven");
+        }else{
+            result = locker.lock("seqOdd");
+        }
         logger.info("locker {} result : {}", seq, result);
         locker.unlock();
     }

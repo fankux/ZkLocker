@@ -50,17 +50,12 @@ public class ZkLocker {
         }
     }
 
-    private void ensureParentDir() {
-        try {
-            Stat stat = zookeeper.exists(DIR, false);
-            if (stat != null) {
-                return;
-            }
-            zookeeper.create(DIR, null, ACLS, CreateMode.PERSISTENT);
-        } catch (Exception e) {
-            logger.error("!!!zk分布式锁:父节点确认失败!!!");
-            throw (RuntimeException) new RuntimeException(e.getMessage()).initCause(e);
+    private void ensureParentDir() throws KeeperException, InterruptedException {
+        Stat stat = zookeeper.exists(DIR, false);
+        if (stat != null) {
+            return;
         }
+        zookeeper.create(DIR, null, ACLS, CreateMode.PERSISTENT);
     }
 
     /* 得到属于当前会话的节点 */
