@@ -5,7 +5,6 @@
 
 package com.fankux.zklocker;
 
-
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.zookeeper.data.ACL;
@@ -88,7 +87,7 @@ public class ZkLocker {
         return results;
     }
 
-    private boolean innerLock(String key) throws KeeperException, InterruptedException {
+    private boolean innerLock(String key, boolean block) throws KeeperException, InterruptedException {
         boolean flag;
         do {
             flag = false;
@@ -116,6 +115,9 @@ public class ZkLocker {
             String ownId = sortedNames.first().getName();
             SortedSet<ZkLockerNode> lessThan = sortedNames.headSet(idNode);
             if (lessThan.size() > 0) { /* 存在更小的节点 */
+                if (!block) {
+                    return false;
+                }
                 ZkLockerNode lastNode = lessThan.last();
                 logger.debug("{}:{}-准备监听前一个节点:{}", tid, id, lastNode.getName());
                 CountDownLatch watcherLatch = new CountDownLatch(1);
@@ -142,14 +144,10 @@ public class ZkLocker {
         return false;
     }
 
-    public synchronized boolean lock() {
-        return lock(null);
-    }
-
-    public synchronized boolean lock(String key) {
+    private boolean lock(String key, boolean block) {
         for (int i = 0; i < RETRY_COUNT; ++i) {
             try {
-                return innerLock(key);
+                return innerLock(key, block);
             } catch (KeeperException.SessionExpiredException e) {
                 logger.warn("{}:{}-会话过期, 获取锁失败, session:{}, 尝试第{}次重连....", tid, id, Long.toHexString(zookeeper.getSessionId()), i + 1);
                 zookeeper = ZkLockerFactory.restart();
@@ -164,6 +162,36 @@ public class ZkLocker {
         return false;
     }
 
+    /**
+     * 阻塞锁, 未获得锁则阻塞, 异常则会重试, 超过重试次数会抛异常
+     *
+     * @param key 键值
+     */
+    public synchronized void lock(String key) {
+        if (!lock(key, true)) {
+            throw new RuntimeException("获取锁异常");
+        }
+    }
+
+    public synchronized void lock() {
+        if (!lock(null, true)) {
+            throw new RuntimeException("获取锁异常");
+        }
+    }
+
+    /**
+     * 非阻塞锁
+     *
+     * @param key 键值
+     * @return 是否锁成功
+     */
+    public synchronized boolean tryLock(String key) {
+        return lock(key, false);
+    }
+
+    public synchronized boolean tryLock() {
+        return lock(null, false);
+    }
 
     public synchronized void unlock() {
         logger.debug("{}:{}-准备unlock", tid, id);

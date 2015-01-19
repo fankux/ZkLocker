@@ -8,6 +8,7 @@ package com.fankux.zklocker;
 import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -111,14 +112,14 @@ class ZkLockerTestRun implements Runnable {
 
     @Override
     public void run() {
-        ZkLocker locker = competeClose();
+        ZkLocker locker = compete();
 
-        boolean result;
-        if(seq%2 == 0){
-            result = locker.lock("seqEven");
-        }else{
-            result = locker.lock("seqOdd");
-        }
+        boolean result = locker.tryLock();
+//        if(seq%2 == 0){
+//            result = locker.lock("seqEven");
+//        }else{
+//            result = locker.lock("seqOdd");
+//        }
         logger.info("locker {} result : {}", seq, result);
         locker.unlock();
     }
