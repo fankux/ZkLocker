@@ -40,12 +40,16 @@ public class ZkLocker {
     private class ZkLockWatcher implements Watcher {
         private CountDownLatch watcherLatch;
 
-        public ZkLockWatcher(CountDownLatch watcherLatch) {
-            this.watcherLatch = watcherLatch;
+        public ZkLockWatcher() {
+            this.watcherLatch = new CountDownLatch(1);
         }
 
         public void process(WatchedEvent event) {
             watcherLatch.countDown();
+        }
+
+        public void await() throws InterruptedException {
+            watcherLatch.await();
         }
     }
 
@@ -120,16 +124,16 @@ public class ZkLocker {
                 }
                 ZkLockerNode lastNode = lessThan.last();
                 logger.debug("{}:{}-准备监听前一个节点:{}", tid, id, lastNode.getName());
-                CountDownLatch watcherLatch = new CountDownLatch(1);
-                Stat stat = zookeeper.exists(lastNode.getName(), new ZkLockWatcher(watcherLatch));
+                ZkLockWatcher watcher = new ZkLockWatcher();
+                Stat stat = zookeeper.exists(lastNode.getName(), watcher);
                 logger.debug("{}:{}-成功监听前一个节点:{}", tid, id, lastNode.getName());
                 if (stat != null) {
                     logger.debug("{}:{}-阻塞等待前一个节点:{}", tid, id, lastNode.getName());
-                    watcherLatch.await();
-                    flag = true;
+                    watcher.await();
                 } else { /* 可能由于前一个节点在调用exist前已经被解锁并删除 */
                     logger.debug("{}:{}-不能找到当前节点前一个节点", tid, id);
                 }
+                flag = true;
             } else {
                 if (ownId != null && id != null && id.equals(ownId)) {
                     logger.debug("{}:{}-ZK分布式锁:获取锁成功", tid, id);

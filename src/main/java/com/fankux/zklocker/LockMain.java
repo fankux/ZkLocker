@@ -112,15 +112,16 @@ class ZkLockerTestRun implements Runnable {
 
     @Override
     public void run() {
-        ZkLocker locker = compete();
+        ZkLocker locker = delay();
 
-        boolean result = locker.tryLock();
-//        if(seq%2 == 0){
-//            result = locker.lock("seqEven");
-//        }else{
-//            result = locker.lock("seqOdd");
-//        }
-        logger.info("locker {} result : {}", seq, result);
+        //boolean result = false;
+//        result = locker.tryLock();
+        if(seq%2 == 0){
+            locker.lock("seqEven");
+        }else{
+            locker.lock("seqOdd");
+        }
+        //logger.info("locker {} result : {}", seq, result);
         locker.unlock();
     }
 }
