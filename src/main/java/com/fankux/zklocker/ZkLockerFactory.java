@@ -84,7 +84,7 @@ public class ZkLockerFactory {
         return new ZkLocker(zookeeper, null);
     }
 
-    public synchronized static ZkLocker getLocker(ZkLockerListener listener) {
+    public synchronized static ZkLocker getLocker(ZkLockerCallback listener) {
         if (!isActive()) {
             start();
         }

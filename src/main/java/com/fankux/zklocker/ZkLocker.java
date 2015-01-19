@@ -30,9 +30,9 @@ public class ZkLocker {
     private String id;                  /* 当前会话节点名 */
     private ZooKeeper zookeeper;
     private ZkLockerNode idNode;        /* 当前会话节点 */
-    private ZkLockerListener listener;  /* 获得锁, 释放锁回调 */
+    private ZkLockerCallback listener;  /* 获得锁, 释放锁回调 */
 
-    public ZkLocker(ZooKeeper zookeeper, ZkLockerListener listener) {
+    public ZkLocker(ZooKeeper zookeeper, ZkLockerCallback listener) {
         this.zookeeper = zookeeper;
         this.listener = listener;
     }
@@ -155,12 +155,13 @@ public class ZkLocker {
             } catch (KeeperException.SessionExpiredException e) {
                 logger.warn("{}:{}-会话过期, 获取锁失败, session:{}, 尝试第{}次重连....", tid, id, Long.toHexString(zookeeper.getSessionId()), i + 1);
                 zookeeper = ZkLockerFactory.restart();
+                Thread.yield();
             } catch (KeeperException.ConnectionLossException e) { /* 断线会自动重连 */
                 logger.warn("{}:{}-失去连接, 尝试第{}次重连....", tid, id, i + 1);
-                delay(i);
+                Thread.yield();
             } catch (Exception e) {
                 logger.warn("{}:{}-出现异常, 尝试第{}次重连....", tid, id, i + 1);
-                delay(i);
+                Thread.yield();
             }
         }
         return false;

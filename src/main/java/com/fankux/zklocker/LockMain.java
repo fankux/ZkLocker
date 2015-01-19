@@ -45,7 +45,7 @@ class ZkLockerTestRun implements Runnable {
             } catch (InterruptedException e) {
                 //do nothing
             }
-            return ZkLockerFactory.getLocker(new LockerListenerDelay(1000));
+            return ZkLockerFactory.getLocker(new LockerCallbackDelay(1000));
         }
         return ZkLockerFactory.getLocker();
     }
@@ -57,7 +57,7 @@ class ZkLockerTestRun implements Runnable {
      * 这种情形暴露了一个问题, 线程获得锁后主动的关闭会话,会导致别的请求也获得锁, 而此线程此时可能并没有主动unlock  */
     private ZkLocker quitFirstForSessionTimeOut() {
         if (seq == 0) { /* 第一个线程 */
-            return ZkLockerFactory.getLocker(new ZkLockerListener() {
+            return ZkLockerFactory.getLocker(new ZkLockerCallback() {
                 @Override
                 public void lockAcquired() {
                     ZkLockerFactory.close();
@@ -85,7 +85,7 @@ class ZkLockerTestRun implements Runnable {
 
     /* 竞争, 每个延迟2秒, 期望效果每2秒一个请求获得锁 */
     private ZkLocker delay() {
-        return ZkLockerFactory.getLocker(new LockerListenerDelay(2000));
+        return ZkLockerFactory.getLocker(new LockerCallbackDelay(2000));
     }
 
     /* 竞争, 要测试多线程同时启动zk客户端, 只有一个成功 */
@@ -97,7 +97,7 @@ class ZkLockerTestRun implements Runnable {
      * 问题分析:线程1(节点A)抢到锁, 然后线程1 unlock时delete了节点A, 并关闭了会话,
      * 然后线程2(节点B)监听节点A, 但是它并不知道节点A已经过期了, 所以sessionExpire, 发生在exist上, 然后通过重试可以再次获得 */
     private ZkLocker competeClose() {
-        return ZkLockerFactory.getLocker(new ZkLockerListener() {
+        return ZkLockerFactory.getLocker(new ZkLockerCallback() {
             @Override
             public void lockAcquired() {
                 ZkLockerFactory.close();
@@ -116,9 +116,9 @@ class ZkLockerTestRun implements Runnable {
 
         //boolean result = false;
 //        result = locker.tryLock();
-        if(seq%2 == 0){
+        if (seq % 2 == 0) {
             locker.lock("seqEven");
-        }else{
+        } else {
             locker.lock("seqOdd");
         }
         //logger.info("locker {} result : {}", seq, result);
@@ -126,10 +126,10 @@ class ZkLockerTestRun implements Runnable {
     }
 }
 
-class LockerListenerDelay implements ZkLockerListener {
+class LockerCallbackDelay implements ZkLockerCallback {
     private long blockTime;
 
-    public LockerListenerDelay(long blockTime) {
+    public LockerCallbackDelay(long blockTime) {
         this.blockTime = blockTime;
     }
 
